@@ -64,16 +64,25 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // For chat completions, use /v1/chat/completions endpoint in both dev and prod
-    const endpoint = '/v1/chat/completions';
+    // Use Ollama's native API endpoint for generate
+    const endpoint = '/api/generate';
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
     
-    // Create request body with only required parameters
+    // Convert OpenAI chat messages format to Ollama prompt format
+    // Get the last user message as the prompt
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    if (!lastUserMessage) {
+      throw new Error('No user message found in the conversation');
+    }
+    
+    // Create request body for Ollama native API
     const requestBody = {
       model,
-      messages,
-      stream: !!onProgress
+      prompt: lastUserMessage.content,
+      stream: !!onProgress,
+      // Include context from previous messages if any
+      context: [] // Ollama uses this for conversational context
     };
     
     console.log('Request payload:', JSON.stringify(requestBody, null, 2));
@@ -124,9 +133,17 @@ export const ollamaService = {
             if (jsonLine) { // Skip empty lines
               try {
                 const parsed = JSON.parse(jsonLine);
-                onProgress(parsed);
-                if (parsed.message?.content) {
-                  fullResponse += parsed.message.content;
+                // Adapt the Ollama response format to our expected format
+                const adaptedResponse: ChatResponse = {
+                  message: {
+                    role: 'assistant',
+                    content: parsed.response || ''
+                  },
+                  done: parsed.done || false
+                };
+                onProgress(adaptedResponse);
+                if (parsed.response) {
+                  fullResponse += parsed.response;
                 }
               } catch (e) {
                 // If we can't parse the current line, it might be incomplete
@@ -150,9 +167,17 @@ export const ollamaService = {
         if (buffer.trim()) {
           try {
             const parsed = JSON.parse(buffer.trim());
-            onProgress(parsed);
-            if (parsed.message?.content) {
-              fullResponse += parsed.message.content;
+            // Adapt the Ollama response format to our expected format
+            const adaptedResponse: ChatResponse = {
+              message: {
+                role: 'assistant',
+                content: parsed.response || ''
+              },
+              done: parsed.done || false
+            };
+            onProgress(adaptedResponse);
+            if (parsed.response) {
+              fullResponse += parsed.response;
             }
           } catch (e) {
             console.warn('Could not parse final buffer chunk:', buffer);
@@ -171,7 +196,8 @@ export const ollamaService = {
       try {
         const response = await axios.post(url, requestBody);
         console.log('Non-streaming response:', response.status);
-        return response.data.message.content;
+        // Adapt the response format
+        return response.data.response || '';
       } catch (error) {
         console.error('Error generating completion:', error);
         // Log more detailed error information

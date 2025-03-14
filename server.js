@@ -91,6 +91,13 @@ app.use('/api', createProxyMiddleware({
       return '/api/tags';
     }
     
+    // For the generate endpoint, we need special handling
+    if (path === '/api/generate') {
+      // Ollama native API for chat generation
+      console.log(`Proxying generate request to: /api/generate`);
+      return '/api/generate';
+    }
+    
     // For other API endpoints, handle normally
     const strippedPath = path.replace(/^\/api/, '');
     
@@ -176,5 +183,5 @@ app.listen(PORT, () => {
   console.log(`Proxying API requests to ${ollamaApiUrl}`);
   console.log(`API base path: ${apiBasePath}`);
   console.log(`Example tag request will be proxied to: ${parsedUrl.protocol}//${parsedUrl.host}/api/tags`);
-  console.log(`Example chat request will be proxied to: ${parsedUrl.protocol}//${parsedUrl.host}/v1/chat/completions`);
+  console.log(`Example generate request will be proxied to: ${parsedUrl.protocol}//${parsedUrl.host}/api/generate`);
 }); 
