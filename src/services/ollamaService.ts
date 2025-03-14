@@ -68,7 +68,15 @@ export const ollamaService = {
     const endpoint = '/v1/chat/completions';
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
-    console.log('Request payload:', JSON.stringify({ model, messages, stream: !!onProgress }, null, 2));
+    
+    // Create request body with only required parameters
+    const requestBody = {
+      model,
+      messages,
+      stream: !!onProgress
+    };
+    
+    console.log('Request payload:', JSON.stringify(requestBody, null, 2));
     
     if (onProgress) {
       // Handle streaming response
@@ -77,18 +85,15 @@ export const ollamaService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model,
-          messages,
-          stream: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       // Log response status for debugging
       console.log('Chat completion response status:', response.status);
       if (!response.ok) {
-        console.error('Error response:', await response.text());
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
       }
 
       if (!response.body) {
@@ -164,14 +169,16 @@ export const ollamaService = {
     } else {
       // Handle non-streaming response
       try {
-        const response = await axios.post(url, {
-          model,
-          messages,
-          stream: false,
-        });
+        const response = await axios.post(url, requestBody);
+        console.log('Non-streaming response:', response.status);
         return response.data.message.content;
       } catch (error) {
         console.error('Error generating completion:', error);
+        // Log more detailed error information
+        if (axios.isAxiosError(error)) {
+          console.error('Status:', error.response?.status);
+          console.error('Response data:', error.response?.data);
+        }
         throw error;
       }
     }
