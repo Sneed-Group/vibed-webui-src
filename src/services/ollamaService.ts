@@ -9,9 +9,9 @@ const getApiBaseUrl = () => {
     return apiUrl;
   }
   
-  // In production, use the current origin with /api path
+  // In production, use the current origin without /api path
   // This will route through our proxy server
-  const prodUrl = `${window.location.origin}/api`;
+  const prodUrl = `${window.location.origin}`;
   console.log('Using production API URL:', prodUrl);
   return prodUrl;
 };
