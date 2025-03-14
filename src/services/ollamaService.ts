@@ -57,10 +57,11 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // In the API, the endpoint is /v1/chat
-    const endpoint = '/v1/chat';
+    // In the API, the endpoint is /v1/chat/completions for OpenAI compatibility
+    const endpoint = '/v1/chat/completions';
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
+    console.log('Request payload:', JSON.stringify({ model, messages, stream: !!onProgress }, null, 2));
     
     if (onProgress) {
       // Handle streaming response
