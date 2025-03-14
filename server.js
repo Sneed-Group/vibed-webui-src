@@ -48,32 +48,22 @@ console.log('Using Ollama API URL:', ollamaApiUrl);
 // Parse the API URL to determine path structure
 const parsedUrl = new URL(ollamaApiUrl);
 const apiBasePath = parsedUrl.pathname;
-console.log('API base path:', apiBasePath);
 
 // Proxy middleware for Ollama API requests
 app.use('/api', createProxyMiddleware({
   target: `${parsedUrl.protocol}//${parsedUrl.host}`,
   changeOrigin: true,
   pathRewrite: (path) => {
-    // Based on our testing, we need to keep the /api prefix when proxying
-    // But we don't want to duplicate it if it's already in the target URL
-    let newPath;
+    // Remove /api from the path and prepend the API base path
+    // This ensures our requests go to the correct endpoint on the Ollama server
+    const strippedPath = path.replace(/^\/api/, '');
     
-    // If the path is /api/api/tags, we want to rewrite to /api/tags
-    // If the path is /api/v1/models, we want to rewrite to /api/v1/models or /v1/models
-    // depending on if the target URL already contains /api
-    
-    if (path.startsWith('/api/api/')) {
-      // For paths like /api/api/tags that need to be rewritten to /api/tags
-      newPath = path.replace('/api/api/', '/api/');
-    } else if (apiBasePath.includes('/api')) {
-      // If the API URL already includes /api, we should avoid duplicating it
-      newPath = path.replace('/api', '');
-    } else {
-      // Otherwise, we keep the path as is
-      newPath = path;
-    }
-    
+    // If the API URL already has a path structure (like /api), use it as a prefix
+    // Otherwise, just use the stripped path
+    const newPath = apiBasePath !== '/' 
+      ? `${apiBasePath}${strippedPath}` 
+      : strippedPath;
+      
     console.log(`Rewriting path from ${path} to ${newPath}`);
     return newPath;
   },
