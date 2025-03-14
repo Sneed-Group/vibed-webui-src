@@ -99,6 +99,8 @@ app.use('/api', createProxyMiddleware({
     // Add specific headers that might be required by the Ollama server
     proxyReq.setHeader('User-Agent', 'Vibed-WebUI/1.0');
     proxyReq.setHeader('Accept', 'application/json');
+    proxyReq.setHeader('Referer', `${parsedUrl.protocol}//${parsedUrl.host}`);
+    proxyReq.setHeader('Origin', `${parsedUrl.protocol}//${parsedUrl.host}`);
     
     // Add authorization header if we have an API key
     if (ollamaApiKey) {
@@ -154,13 +156,6 @@ app.use('/api', createProxyMiddleware({
       // Ollama native API for chat
       console.log(`Proxying chat request to: /api/chat`);
       return '/api/chat';
-    }
-    
-    // For the completion endpoint, we need special handling
-    if (path === '/api/completion') {
-      // Ollama API completion endpoint
-      console.log(`Proxying completion request to: /api/completion`);
-      return '/api/completion';
     }
     
     // For other API endpoints, handle normally

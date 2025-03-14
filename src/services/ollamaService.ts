@@ -38,17 +38,15 @@ interface ChatResponse {
   done?: boolean;
 }
 
-// Define Ollama completion API request interface
-interface OllamaCompletionRequest {
+// Define Ollama generate API request interface
+interface OllamaGenerateRequest {
   model: string;
   prompt: string;
   stream: boolean;
   system?: string;
   options?: {
     temperature: number;
-    num_predict?: number;
   };
-  context?: number[];
 }
 
 export const ollamaService = {
@@ -80,10 +78,10 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // Use Ollama's completion API endpoint
-    const endpoint = '/api/completion';
+    // Use Ollama's generate API endpoint
+    const endpoint = '/api/generate';
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log('Generating completion using Ollama completion API:', url);
+    console.log('Generating completion using Ollama generate API:', url);
     
     // Extract the last user message as the prompt
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
@@ -103,8 +101,8 @@ export const ollamaService = {
       }
     }
     
-    // Create request body according to Ollama's completion API specification
-    const requestBody: OllamaCompletionRequest = {
+    // Create request body according to Ollama's generate API specification
+    const requestBody: OllamaGenerateRequest = {
       model,
       prompt: lastUserMessage.content,
       stream: !!onProgress,
