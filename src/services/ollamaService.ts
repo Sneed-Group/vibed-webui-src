@@ -1,23 +1,6 @@
 import axios from 'axios';
 
-// Get the API URL for different environments
-const getApiBaseUrl = () => {
-  // In development, use the environment variable directly
-  if (import.meta.env.DEV) {
-    const apiUrl = import.meta.env.VITE_OLLAMA_API_URL;
-    console.log('Using development API URL:', apiUrl);
-    return apiUrl;
-  }
-  
-  // In production, use the current origin with /api path
-  // This will route through our proxy server
-  const prodUrl = `${window.location.origin}/api`;
-  console.log('Using production API URL:', prodUrl);
-  return prodUrl;
-};
-
-// Use the function to determine the API base URL
-const API_BASE_URL = getApiBaseUrl();
+const OLLAMA_API_URL = import.meta.env.VITE_OLLAMA_API_URL;
 
 interface ModelInfo {
   name: string;
@@ -35,49 +18,11 @@ interface ChatResponse {
   done: boolean;
 }
 
-// Interface for the OpenAI API model format
-interface OpenAIModel {
-  id: string;
-  object: string;
-  created: number;
-  owned_by: string;
-}
-
 export const ollamaService = {
   // Get list of available models
   async getModels(): Promise<ModelInfo[]> {
-    try {
-      // The correct API endpoint is /api/tags (which becomes /api/api/tags through our proxy)
-      const endpoint = '/api/tags';
-      const url = `${API_BASE_URL}${endpoint}`;
-      console.log('Fetching models from:', url);
-      const response = await axios.get(url);
-      return response.data.models;
-    } catch (error) {
-      console.error('Error fetching models:', error);
-      
-      // Fallback to the alternate API endpoint if the first one fails
-      try {
-        console.log('Trying alternate endpoint...');
-        const alternateEndpoint = '/v1/models';
-        const alternateUrl = `${API_BASE_URL}${alternateEndpoint}`;
-        console.log('Fetching models from alternate endpoint:', alternateUrl);
-        
-        const response = await axios.get(alternateUrl);
-        
-        // Convert from OpenAI format to Ollama format
-        const models = response.data.data.map((model: OpenAIModel) => ({
-          name: model.id,
-          modified_at: new Date(model.created * 1000).toISOString(),
-          size: 0 // Size information not available in the OpenAI format
-        }));
-        
-        return models;
-      } catch (fallbackError) {
-        console.error('Fallback also failed:', fallbackError);
-        throw error; // Throw the original error
-      }
-    }
+    const response = await axios.get(`${OLLAMA_API_URL}/api/tags`);
+    return response.data.models;
   },
 
   // Generate chat completion
@@ -86,14 +31,9 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // The correct API endpoint is /api/chat (which becomes /api/api/chat through our proxy)
-    const endpoint = '/api/chat';
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log('Generating completion from:', url);
-    
     if (onProgress) {
       // Handle streaming response
-      const response = await fetch(url, {
+      const response = await fetch(`${OLLAMA_API_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,35 +117,12 @@ export const ollamaService = {
       return fullResponse;
     } else {
       // Handle non-streaming response
-      try {
-        const response = await axios.post(url, {
-          model,
-          messages,
-          stream: false,
-        });
-        return response.data.message.content;
-      } catch (error) {
-        console.error('Error generating completion:', error);
-        
-        // Try the OpenAI-compatible endpoint if the Ollama endpoint fails
-        try {
-          console.log('Trying OpenAI-compatible endpoint...');
-          const alternateEndpoint = '/v1/chat/completions';
-          const alternateUrl = `${API_BASE_URL}${alternateEndpoint}`;
-          
-          const response = await axios.post(alternateUrl, {
-            model,
-            messages,
-            stream: false
-          });
-          
-          // Extract content from OpenAI format
-          return response.data.choices[0].message.content;
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError);
-          throw error; // Throw the original error
-        }
-      }
+      const response = await axios.post(`${OLLAMA_API_URL}/api/chat`, {
+        model,
+        messages,
+        stream: false,
+      });
+      return response.data.message.content;
     }
   }
 }; 
