@@ -26,13 +26,28 @@ interface ModelInfo {
 }
 
 interface ChatMessage {
-  role: 'assistant' | 'user';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
 interface ChatResponse {
-  message: ChatMessage;
-  done: boolean;
+  message?: {
+    role: string;
+    content: string;
+  };
+  done?: boolean;
+}
+
+// Define the Ollama API request interface
+interface OllamaGenerateRequest {
+  model: string;
+  prompt: string;
+  stream: boolean;
+  options: {
+    temperature: number;
+    num_predict: number;
+  };
+  system?: string;  // Make system property optional
 }
 
 export const ollamaService = {
@@ -88,16 +103,21 @@ export const ollamaService = {
     }
     
     // Create request body according to Ollama's API specification
-    const requestBody = {
+    // Make sure the format matches exactly what the Ollama API expects
+    const requestBody: OllamaGenerateRequest = {
       model,
       prompt: lastUserMessage.content,
       stream: !!onProgress,
       options: {
         temperature: 0.7,
         num_predict: 1024
-      },
-      ...(systemPrompt ? { system: `Previous conversation:\n${systemPrompt}` } : {})
+      }
     };
+    
+    // Add system prompt if available
+    if (systemPrompt) {
+      requestBody.system = `Previous conversation:\n${systemPrompt}`;
+    }
     
     console.log('Request payload:', JSON.stringify(requestBody, null, 2));
     
@@ -218,6 +238,8 @@ export const ollamaService = {
         if (axios.isAxiosError(error)) {
           console.error('Status:', error.response?.status);
           console.error('Response data:', error.response?.data);
+          console.error('Request URL:', url);
+          console.error('Request body:', JSON.stringify(requestBody, null, 2));
         }
         throw error;
       }

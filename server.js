@@ -24,8 +24,26 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: '*', // Allow all origins
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Add OPTIONS pre-flight support for all routes
+app.options('*', cors());
+
+// Add middleware to log all incoming requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  
+  // Log headers for debugging
+  if (req.method === 'POST' || req.method === 'OPTIONS') {
+    console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  }
+  
+  next();
+});
 
 // Get the Ollama API URL from environment or use the default
 // Try to read from .env file first for the most accurate value
@@ -57,19 +75,35 @@ const apiBasePath = parsedUrl.pathname;
 app.use('/api', createProxyMiddleware({
   target: `${parsedUrl.protocol}//${parsedUrl.host}`,
   changeOrigin: true,
+  logLevel: 'debug', // Add debug logging for more information
   // Forward authorization headers if present
   onProxyReq: (proxyReq, req, res) => {
-    // Forward authorization headers if present
-    if (req.headers.authorization) {
-      console.log('Forwarding Authorization header');
-      proxyReq.setHeader('Authorization', req.headers.authorization);
-    }
+    // Forward all headers from the client
+    Object.keys(req.headers).forEach(key => {
+      if (key !== 'host') {  // Don't forward the host header
+        const value = req.headers[key];
+        proxyReq.setHeader(key, value);
+      }
+    });
+    
+    // Clear any existing content-length to prevent issues
+    proxyReq.removeHeader('Content-Length');
     
     // Re-encode the body if it exists to ensure content-length is correct
     if (req.body) {
       const bodyData = JSON.stringify(req.body);
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      
+      // Log the detailed request info
+      console.log('=========== PROXY REQUEST DETAILS ===========');
+      console.log(`METHOD: ${req.method}`);
+      console.log(`PATH: ${req.path}`);
+      console.log(`TARGET: ${parsedUrl.protocol}//${parsedUrl.host}${proxyReq.path}`);
+      console.log(`HEADERS:`, JSON.stringify(proxyReq.getHeaders(), null, 2));
+      console.log(`BODY:`, bodyData);
+      console.log('============================================');
+      
       // Write body to request
       proxyReq.write(bodyData);
     }
@@ -77,11 +111,6 @@ app.use('/api', createProxyMiddleware({
     // Log the full proxy request details for debugging
     console.log(`Proxying Ollama API request: ${req.method} ${req.path}`);
     console.log(`Target: ${parsedUrl.protocol}//${parsedUrl.host}${proxyReq.path}`);
-    
-    // For POST requests, log the request body
-    if (req.method === 'POST' && req.body) {
-      console.log('Request body:', JSON.stringify(req.body, null, 2));
-    }
   },
   pathRewrite: (path) => {
     // For the tags endpoint, we need special handling
@@ -109,6 +138,23 @@ app.use('/api', createProxyMiddleware({
       
     console.log(`Rewriting path from ${path} to ${newPath}`);
     return newPath;
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    // Log the response status and headers for debugging
+    console.log(`Proxy Response Status: ${proxyRes.statusCode}`);
+    console.log(`Proxy Response Headers:`, JSON.stringify(proxyRes.headers, null, 2));
+    
+    // If it's an error status, log more information
+    if (proxyRes.statusCode >= 400) {
+      let responseBody = '';
+      proxyRes.on('data', (chunk) => {
+        responseBody += chunk;
+      });
+      
+      proxyRes.on('end', () => {
+        console.error('Error Response Body:', responseBody);
+      });
+    }
   },
   onError: (err, req, res) => {
     console.error('Proxy error:', err);
