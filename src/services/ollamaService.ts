@@ -40,7 +40,7 @@ export const ollamaService = {
   async getModels(): Promise<ModelInfo[]> {
     try {
       // In the API, the endpoint is /api/tags
-      const endpoint = '/tags';
+      const endpoint = '/api/tags';
       const url = `${API_BASE_URL}${endpoint}`;
       console.log('Fetching models from:', url);
       const response = await axios.get(url);
@@ -57,8 +57,8 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // In the API, the endpoint is /api/chat
-    const endpoint = '/chat';
+    // In the API, the endpoint is /v1/chat
+    const endpoint = '/v1/chat';
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
     
