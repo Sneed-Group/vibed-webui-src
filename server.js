@@ -56,12 +56,9 @@ app.use('/api', createProxyMiddleware({
   pathRewrite: (path) => {
     // For the tags endpoint, we need special handling
     if (path === '/api/tags') {
-      // Assuming the Ollama API expects /api/tags endpoint
-      const tagsPath = apiBasePath !== '/' 
-        ? `${apiBasePath}/tags` 
-        : '/tags';
-      console.log(`Rewriting tags path from ${path} to ${tagsPath}`);
-      return tagsPath;
+      // Ollama API expects /api/tags endpoint
+      console.log(`Rewriting /api/tags path to: /api/tags`);
+      return '/api/tags';
     }
     
     // For other API endpoints, handle normally
@@ -93,13 +90,9 @@ app.use('/v1', createProxyMiddleware({
   pathRewrite: (path) => {
     // For the chat completions endpoint, we need special handling
     if (path === '/v1/chat/completions') {
-      // Assuming the Ollama API expects /v1/chat/completions endpoint 
-      // or maybe just /chat/completions depending on the API
-      const chatPath = apiBasePath !== '/' 
-        ? `${apiBasePath}/chat/completions` 
-        : '/chat/completions';
-      console.log(`Rewriting chat completions path from ${path} to ${chatPath}`);
-      return chatPath;
+      // Ollama API expects /v1/chat/completions endpoint
+      console.log(`Rewriting /v1/chat/completions path to: /v1/chat/completions`);
+      return '/v1/chat/completions';
     }
     
     // For other v1 endpoints, handle normally
@@ -137,6 +130,6 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Proxying API requests to ${ollamaApiUrl}`);
   console.log(`API base path: ${apiBasePath}`);
-  console.log(`Example tag request will be proxied to: ${apiBasePath !== '/' ? `${apiBasePath}/tags` : '/tags'}`);
-  console.log(`Example chat request will be proxied to: ${apiBasePath !== '/' ? `${apiBasePath}/chat/completions` : '/chat/completions'}`);
+  console.log(`Example tag request will be proxied to: ${parsedUrl.protocol}//${parsedUrl.host}/api/tags`);
+  console.log(`Example chat request will be proxied to: ${parsedUrl.protocol}//${parsedUrl.host}/v1/chat/completions`);
 }); 
