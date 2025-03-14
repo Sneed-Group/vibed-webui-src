@@ -55,60 +55,35 @@ app.use('/api', createProxyMiddleware({
   target: `${parsedUrl.protocol}//${parsedUrl.host}`,
   changeOrigin: true,
   pathRewrite: (path) => {
-    // Log the incoming path before any modification
-    console.log(`Original path: ${path}`);
+    // Based on our testing, we need to keep the /api prefix when proxying
+    // But we don't want to duplicate it if it's already in the target URL
+    let newPath;
     
-    // Try these path rewriting strategies in order:
+    // If the path is /api/api/tags, we want to rewrite to /api/tags
+    // If the path is /api/v1/models, we want to rewrite to /api/v1/models or /v1/models
+    // depending on if the target URL already contains /api
     
-    // 1. If the path is /api/api/tags, we want to rewrite to /api/tags
     if (path.startsWith('/api/api/')) {
-      const newPath = path.replace('/api/api/', '/api/');
-      console.log(`Rule 1: Rewriting ${path} to ${newPath}`);
-      return newPath;
+      // For paths like /api/api/tags that need to be rewritten to /api/tags
+      newPath = path.replace('/api/api/', '/api/');
+    } else if (apiBasePath.includes('/api')) {
+      // If the API URL already includes /api, we should avoid duplicating it
+      newPath = path.replace('/api', '');
+    } else {
+      // Otherwise, we keep the path as is
+      newPath = path;
     }
     
-    // 2. If the API base path already contains /api, avoid duplication
-    if (apiBasePath.includes('/api')) {
-      const newPath = path.replace('/api', '');
-      console.log(`Rule 2: Rewriting ${path} to ${newPath}`);
-      return newPath;
-    }
-    
-    // 3. Try appending /ollama to the path
-    if (!path.includes('/ollama')) {
-      const newPath = `/ollama${path}`;
-      console.log(`Rule 3: Rewriting ${path} to ${newPath}`);
-      return newPath;
-    }
-    
-    // 4. Keep original path as fallback
-    console.log(`Rule 4: Keeping original path ${path}`);
-    return path;
+    console.log(`Rewriting path from ${path} to ${newPath}`);
+    return newPath;
   },
   onProxyReq: (proxyReq, req, res) => {
     // Log proxy requests for debugging
     console.log(`Proxying request from ${req.path} to: ${parsedUrl.protocol}//${parsedUrl.host}${proxyReq.path}`);
   },
-  onProxyRes: (proxyRes, req, res) => {
-    // Log response status and headers for debugging
-    console.log(`Proxy response status: ${proxyRes.statusCode}`);
-    console.log(`Proxy response headers:`, JSON.stringify(proxyRes.headers, null, 2));
-    
-    // Check if it's returning HTML when we expected JSON
-    const contentType = proxyRes.headers['content-type'] || '';
-    if (contentType.includes('text/html') && req.path.includes('/api/tags')) {
-      console.log('Warning: HTML response received for API request, client will handle fallback');
-    }
-  },
   onError: (err, req, res) => {
     console.error('Proxy error:', err);
-    
-    // Return a structured error response for API requests
-    res.status(500).json({
-      error: 'Proxy error',
-      message: err.message,
-      fallback: true
-    });
+    res.status(500).send('Proxy error: ' + err.message);
   }
 }));
 
