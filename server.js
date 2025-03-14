@@ -77,6 +77,34 @@ app.use('/api', createProxyMiddleware({
   }
 }));
 
+// Proxy middleware for Ollama API requests
+app.use('/v1', createProxyMiddleware({
+  target: `${parsedUrl.protocol}//${parsedUrl.host}`,
+  changeOrigin: true,
+  pathRewrite: (path) => {
+    // Remove /api from the path and prepend the API base path
+    // This ensures our requests go to the correct endpoint on the Ollama server
+    const strippedPath = path.replace(/^\/v1/, '');
+    
+    // If the API URL already has a path structure (like /v1/ use it as a prefix
+    // Otherwise, just use the stripped path
+    const newPath = apiBasePath !== '/' 
+      ? `${apiBasePath}${strippedPath}` 
+      : strippedPath;
+      
+    console.log(`Rewriting path from ${path} to ${newPath}`);
+    return newPath;
+  },
+  onProxyReq: (proxyReq, req, res) => {
+    // Log proxy requests for debugging
+    console.log(`Proxying request from ${req.path} to: ${parsedUrl.protocol}//${parsedUrl.host}${proxyReq.path}`);
+  },
+  onError: (err, req, res) => {
+    console.error('Proxy error:', err);
+    res.status(500).send('Proxy error: ' + err.message);
+  }
+}));
+
 // Serve static files from the 'dist' directory
 app.use(express.static(path.join(__dirname, 'dist')));
 
