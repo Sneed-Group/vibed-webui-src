@@ -38,16 +38,18 @@ interface ChatResponse {
   done?: boolean;
 }
 
-// Define the Ollama API request interface
-interface OllamaGenerateRequest {
+// Define the OpenAI API request interface
+interface OpenAIMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface OpenAIChatRequest {
   model: string;
-  prompt: string;
+  messages: OpenAIMessage[];
   stream: boolean;
-  options: {
-    temperature: number;
-    num_predict: number;
-  };
-  system?: string;  // Make system property optional
+  temperature?: number;
+  max_tokens?: number;
 }
 
 export const ollamaService = {
@@ -73,51 +75,31 @@ export const ollamaService = {
     }
   },
 
-  // Generate chat completion
+  // Generate chat completion using OpenAI-compatible API
   async generateCompletion(
     model: string,
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // Use Ollama's native API endpoint for generate
-    const endpoint = '/api/generate';
+    // Use OpenAI-compatible API endpoint for chat completions
+    const endpoint = '/v1/chat/completions';
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log('Generating completion from:', url);
+    console.log('Generating completion from OpenAI-compatible endpoint:', url);
     
-    // Extract the last user message as the prompt
-    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
-    if (!lastUserMessage) {
-      throw new Error('No user message found in the conversation');
-    }
+    // Format messages for OpenAI API
+    const formattedMessages: OpenAIMessage[] = messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
     
-    // Create a system prompt from previous assistant messages if available
-    let systemPrompt = '';
-    if (messages.length > 1) {
-      // Get all previous messages and format them as a conversation
-      const previousMessages = messages.slice(0, -1); // All except the last user message
-      if (previousMessages.length > 0) {
-        systemPrompt = previousMessages
-          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-          .join('\n\n');
-      }
-    }
-    
-    // Create request body according to Ollama's API specification
-    // Make sure the format matches exactly what the Ollama API expects
-    const requestBody: OllamaGenerateRequest = {
+    // Create request body according to OpenAI API specification
+    const requestBody: OpenAIChatRequest = {
       model,
-      prompt: lastUserMessage.content,
+      messages: formattedMessages,
       stream: !!onProgress,
-      options: {
-        temperature: 0.7,
-        num_predict: 1024
-      }
+      temperature: 0.7,
+      max_tokens: 1024
     };
-    
-    // Add system prompt if available
-    if (systemPrompt) {
-      requestBody.system = `Previous conversation:\n${systemPrompt}`;
-    }
     
     console.log('Request payload:', JSON.stringify(requestBody, null, 2));
     
@@ -157,36 +139,53 @@ export const ollamaService = {
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
           
-          // Process complete JSON objects from the buffer
+          // Process chunks by looking for "data: " prefix (SSE format)
           let startIndex = 0;
-          let endIndex = -1;
-          
-          // Find each newline-delimited JSON object in the buffer
-          while ((endIndex = buffer.indexOf('\n', startIndex)) !== -1) {
-            const jsonLine = buffer.substring(startIndex, endIndex).trim();
-            if (jsonLine) { // Skip empty lines
-              try {
-                const parsed = JSON.parse(jsonLine);
-                // Adapt the Ollama response format to our expected format
-                const adaptedResponse: ChatResponse = {
-                  message: {
-                    role: 'assistant',
-                    content: parsed.response || ''
-                  },
-                  done: parsed.done || false
-                };
-                onProgress(adaptedResponse);
-                if (parsed.response) {
-                  fullResponse += parsed.response;
-                }
-              } catch (e) {
-                // If we can't parse the current line, it might be incomplete
-                // We'll leave it in the buffer for the next iteration
-                buffer = buffer.substring(startIndex);
-                break;
-              }
-            }
+          while (true) {
+            const dataIndex = buffer.indexOf('data: ', startIndex);
+            if (dataIndex === -1) break;
+            
+            startIndex = dataIndex + 6; // Move past "data: "
+            
+            // Find the end of this SSE message
+            const endIndex = buffer.indexOf('\n', startIndex);
+            if (endIndex === -1) break; // Incomplete line, wait for more data
+            
+            // Extract the SSE message
+            const sseMessage = buffer.substring(startIndex, endIndex).trim();
             startIndex = endIndex + 1;
+            
+            // Skip heartbeat messages
+            if (sseMessage === '[DONE]') continue;
+            
+            try {
+              if (sseMessage) {
+                const parsed = JSON.parse(sseMessage);
+                
+                // Extract the content from the OpenAI-style response
+                if (parsed.choices && parsed.choices[0]) {
+                  const delta = parsed.choices[0].delta;
+                  const content = delta.content || '';
+                  
+                  if (content) {
+                    fullResponse += content;
+                    
+                    // Adapt to our expected format
+                    const adaptedResponse: ChatResponse = {
+                      message: {
+                        role: 'assistant',
+                        content
+                      },
+                      done: false
+                    };
+                    
+                    onProgress(adaptedResponse);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Could not parse SSE message:', sseMessage, e);
+            }
           }
           
           // Keep any remaining incomplete data in the buffer
@@ -197,26 +196,12 @@ export const ollamaService = {
           }
         }
         
-        // Process any remaining data in the buffer
-        if (buffer.trim()) {
-          try {
-            const parsed = JSON.parse(buffer.trim());
-            // Adapt the Ollama response format to our expected format
-            const adaptedResponse: ChatResponse = {
-              message: {
-                role: 'assistant',
-                content: parsed.response || ''
-              },
-              done: parsed.done || false
-            };
-            onProgress(adaptedResponse);
-            if (parsed.response) {
-              fullResponse += parsed.response;
-            }
-          } catch (e) {
-            console.warn('Could not parse final buffer chunk:', buffer);
-          }
-        }
+        // Signal completion
+        onProgress({
+          message: { role: 'assistant', content: '' },
+          done: true
+        });
+        
       } catch (error) {
         console.error('Error reading stream:', error);
         throw error;
@@ -230,8 +215,13 @@ export const ollamaService = {
       try {
         const response = await axios.post(url, requestBody);
         console.log('Non-streaming response:', response.status);
-        // Return the response from Ollama's native API format
-        return response.data.response || '';
+        
+        // Extract the content from the OpenAI-style response
+        if (response.data.choices && response.data.choices[0]) {
+          return response.data.choices[0].message.content || '';
+        }
+        
+        return '';
       } catch (error) {
         console.error('Error generating completion:', error);
         // Log more detailed error information
