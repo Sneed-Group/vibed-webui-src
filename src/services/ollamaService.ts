@@ -38,18 +38,17 @@ interface ChatResponse {
   done?: boolean;
 }
 
-// Define Ollama chat API request interface
-interface OllamaChatRequest {
+// Define Ollama completion API request interface
+interface OllamaCompletionRequest {
   model: string;
-  messages: {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-  }[];
+  prompt: string;
   stream: boolean;
+  system?: string;
   options?: {
     temperature: number;
     num_predict?: number;
   };
+  context?: number[];
 }
 
 export const ollamaService = {
@@ -75,29 +74,49 @@ export const ollamaService = {
     }
   },
 
-  // Generate chat completion using Ollama's native chat API
+  // Generate chat completion using Ollama's completion API as a fallback
   async generateCompletion(
     model: string,
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // Use Ollama's native chat API endpoint
-    const endpoint = '/api/chat';
+    // Use Ollama's completion API endpoint
+    const endpoint = '/api/completion';
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log('Generating completion using Ollama chat API:', url);
+    console.log('Generating completion using Ollama completion API:', url);
     
-    // Create request body according to Ollama's chat API specification
-    const requestBody: OllamaChatRequest = {
+    // Extract the last user message as the prompt
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    if (!lastUserMessage) {
+      throw new Error('No user message found in the conversation');
+    }
+    
+    // Create a system prompt from previous messages
+    let systemPrompt = '';
+    if (messages.length > 1) {
+      // Format previous messages as a conversation
+      const previousMessages = messages.slice(0, -1); // All except the last user message
+      if (previousMessages.length > 0) {
+        systemPrompt = previousMessages
+          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+          .join('\n\n');
+      }
+    }
+    
+    // Create request body according to Ollama's completion API specification
+    const requestBody: OllamaCompletionRequest = {
       model,
-      messages: messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      })),
+      prompt: lastUserMessage.content,
       stream: !!onProgress,
       options: {
         temperature: 0.7
       }
     };
+    
+    // Add system prompt if available
+    if (systemPrompt) {
+      requestBody.system = `Previous conversation:\n${systemPrompt}`;
+    }
     
     console.log('Request payload:', JSON.stringify(requestBody, null, 2));
     
@@ -148,9 +167,9 @@ export const ollamaService = {
               try {
                 const parsed = JSON.parse(jsonLine);
                 
-                // Extract content from Ollama's chat API response
-                if (parsed.message) {
-                  const content = parsed.message.content || '';
+                // Extract content from Ollama's completion API response
+                if (parsed.response) {
+                  const content = parsed.response || '';
                   
                   if (content) {
                     fullResponse += content;
@@ -204,9 +223,9 @@ export const ollamaService = {
         const response = await axios.post(url, requestBody);
         console.log('Non-streaming response:', response.status);
         
-        // Extract content from Ollama's chat API response
-        if (response.data && response.data.message) {
-          return response.data.message.content || '';
+        // Extract content from Ollama's completion API response
+        if (response.data && response.data.response) {
+          return response.data.response || '';
         }
         
         return '';

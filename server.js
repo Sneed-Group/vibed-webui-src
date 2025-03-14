@@ -48,16 +48,26 @@ app.use((req, res, next) => {
 // Get the Ollama API URL from environment or use the default
 // Try to read from .env file first for the most accurate value
 let ollamaApiUrl;
+let ollamaApiKey = '';
+
 try {
   const envContent = fs.readFileSync('.env', 'utf8');
-  const match = envContent.match(/VITE_OLLAMA_API_URL=(.+)/);
-  if (match && match[1]) {
-    ollamaApiUrl = match[1].trim();
+  const urlMatch = envContent.match(/VITE_OLLAMA_API_URL=(.+)/);
+  if (urlMatch && urlMatch[1]) {
+    ollamaApiUrl = urlMatch[1].trim();
   } else {
     ollamaApiUrl = process.env.VITE_OLLAMA_API_URL || 'https://ai.nodemixaholic.com/api';
   }
+  
+  // Try to get API key if it exists
+  const keyMatch = envContent.match(/VITE_OLLAMA_API_KEY=(.+)/);
+  if (keyMatch && keyMatch[1]) {
+    ollamaApiKey = keyMatch[1].trim();
+    console.log('Found API key in .env file');
+  }
 } catch (error) {
   ollamaApiUrl = process.env.VITE_OLLAMA_API_URL || 'https://ai.nodemixaholic.com/api';
+  ollamaApiKey = process.env.VITE_OLLAMA_API_KEY || '';
 }
 
 // Make sure URL doesn't end with a slash
@@ -86,14 +96,23 @@ app.use('/api', createProxyMiddleware({
       }
     });
     
+    // Add specific headers that might be required by the Ollama server
+    proxyReq.setHeader('User-Agent', 'Vibed-WebUI/1.0');
+    proxyReq.setHeader('Accept', 'application/json');
+    
+    // Add authorization header if we have an API key
+    if (ollamaApiKey) {
+      proxyReq.setHeader('Authorization', `Bearer ${ollamaApiKey}`);
+      console.log('Added Bearer token to request');
+    }
+    
     // Clear any existing content-length to prevent issues
     proxyReq.removeHeader('Content-Length');
     
     // Re-encode the body if it exists to ensure content-length is correct
     if (req.body) {
-      const bodyData = JSON.stringify(req.body);
-      proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      // Create a proper body format based on the request path
+      let bodyData = JSON.stringify(req.body);
       
       // Log the detailed request info
       console.log('=========== PROXY REQUEST DETAILS ===========');
@@ -103,6 +122,9 @@ app.use('/api', createProxyMiddleware({
       console.log(`HEADERS:`, JSON.stringify(proxyReq.getHeaders(), null, 2));
       console.log(`BODY:`, bodyData);
       console.log('============================================');
+      
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
       
       // Write body to request
       proxyReq.write(bodyData);
@@ -132,6 +154,13 @@ app.use('/api', createProxyMiddleware({
       // Ollama native API for chat
       console.log(`Proxying chat request to: /api/chat`);
       return '/api/chat';
+    }
+    
+    // For the completion endpoint, we need special handling
+    if (path === '/api/completion') {
+      // Ollama API completion endpoint
+      console.log(`Proxying completion request to: /api/completion`);
+      return '/api/completion';
     }
     
     // For other API endpoints, handle normally
