@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   
   return {
     plugins: [react()],
+    base: './', // Use relative paths
     server: {
       port: parseInt(env.VITE_UI_PORT || '5173'),
       strictPort: true, // Fail if port is in use
