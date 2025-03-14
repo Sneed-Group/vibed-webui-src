@@ -2,14 +2,18 @@ import axios from 'axios';
 
 // Get the API URL for different environments
 const getApiBaseUrl = () => {
-  // In development, use the environment variable
+  // In development, use the environment variable directly
   if (import.meta.env.DEV) {
-    return import.meta.env.VITE_OLLAMA_API_URL;
+    const apiUrl = import.meta.env.VITE_OLLAMA_API_URL;
+    console.log('Using development API URL:', apiUrl);
+    return apiUrl;
   }
   
   // In production, use the current origin with /api path
   // This will route through our proxy server
-  return `${window.location.origin}/api`;
+  const prodUrl = `${window.location.origin}/api`;
+  console.log('Using production API URL:', prodUrl);
+  return prodUrl;
 };
 
 // Use the function to determine the API base URL
@@ -34,8 +38,17 @@ interface ChatResponse {
 export const ollamaService = {
   // Get list of available models
   async getModels(): Promise<ModelInfo[]> {
-    const response = await axios.get(`${API_BASE_URL}/tags`);
-    return response.data.models;
+    try {
+      // In the API, the endpoint is /api/tags
+      const endpoint = '/tags';
+      const url = `${API_BASE_URL}${endpoint}`;
+      console.log('Fetching models from:', url);
+      const response = await axios.get(url);
+      return response.data.models;
+    } catch (error) {
+      console.error('Error fetching models:', error);
+      throw error;
+    }
   },
 
   // Generate chat completion
@@ -44,9 +57,14 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
+    // In the API, the endpoint is /api/chat
+    const endpoint = '/chat';
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log('Generating completion from:', url);
+    
     if (onProgress) {
       // Handle streaming response
-      const response = await fetch(`${API_BASE_URL}/chat`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,12 +148,17 @@ export const ollamaService = {
       return fullResponse;
     } else {
       // Handle non-streaming response
-      const response = await axios.post(`${API_BASE_URL}/chat`, {
-        model,
-        messages,
-        stream: false,
-      });
-      return response.data.message.content;
+      try {
+        const response = await axios.post(url, {
+          model,
+          messages,
+          stream: false,
+        });
+        return response.data.message.content;
+      } catch (error) {
+        console.error('Error generating completion:', error);
+        throw error;
+      }
     }
   }
 }; 

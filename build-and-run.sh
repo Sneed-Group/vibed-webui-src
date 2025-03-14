@@ -12,8 +12,14 @@ npm run build
 if [ $? -eq 0 ]; then
   echo "Build successful! Starting the server..."
   
-  # Start the proxy server
-  npm start
+  # Check if debug mode is requested
+  if [[ "$1" == "--debug" ]]; then
+    echo "Running in debug mode..."
+    npm run debug
+  else
+    # Start the proxy server
+    npm start
+  fi
 else
   echo "Build failed. Please check the errors above."
   exit 1
