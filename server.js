@@ -127,6 +127,13 @@ app.use('/api', createProxyMiddleware({
       return '/api/generate';
     }
     
+    // For the chat endpoint, we need special handling
+    if (path === '/api/chat') {
+      // Ollama native API for chat
+      console.log(`Proxying chat request to: /api/chat`);
+      return '/api/chat';
+    }
+    
     // For other API endpoints, handle normally
     const strippedPath = path.replace(/^\/api/, '');
     
