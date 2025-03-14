@@ -9,7 +9,7 @@ const getApiBaseUrl = () => {
     return apiUrl;
   }
   
-  // In production, use the current origin without /api path
+  // In production, use the current origin
   // This will route through our proxy server
   const prodUrl = `${window.location.origin}`;
   console.log('Using production API URL:', prodUrl);
@@ -39,14 +39,21 @@ export const ollamaService = {
   // Get list of available models
   async getModels(): Promise<ModelInfo[]> {
     try {
-      // In the API, the endpoint is /api/tags
+      // For tags, use /api/tags endpoint in both dev and prod
       const endpoint = '/api/tags';
       const url = `${API_BASE_URL}${endpoint}`;
+      
       console.log('Fetching models from:', url);
       const response = await axios.get(url);
+      console.log('Models response:', response.data);
       return response.data.models;
     } catch (error) {
       console.error('Error fetching models:', error);
+      // Log more detailed error information
+      if (axios.isAxiosError(error)) {
+        console.error('Status:', error.response?.status);
+        console.error('Response data:', error.response?.data);
+      }
       throw error;
     }
   },
@@ -57,7 +64,7 @@ export const ollamaService = {
     messages: ChatMessage[],
     onProgress?: (response: ChatResponse) => void
   ): Promise<string> {
-    // In the API, the endpoint is /v1/chat/completions for OpenAI compatibility
+    // For chat completions, use /v1/chat/completions endpoint in both dev and prod
     const endpoint = '/v1/chat/completions';
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
@@ -76,6 +83,13 @@ export const ollamaService = {
           stream: true,
         }),
       });
+
+      // Log response status for debugging
+      console.log('Chat completion response status:', response.status);
+      if (!response.ok) {
+        console.error('Error response:', await response.text());
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       if (!response.body) {
         throw new Error('Response body is null');

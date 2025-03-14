@@ -54,8 +54,17 @@ app.use('/api', createProxyMiddleware({
   target: `${parsedUrl.protocol}//${parsedUrl.host}`,
   changeOrigin: true,
   pathRewrite: (path) => {
-    // Remove /api from the path and prepend the API base path
-    // This ensures our requests go to the correct endpoint on the Ollama server
+    // For the tags endpoint, we need special handling
+    if (path === '/api/tags') {
+      // Assuming the Ollama API expects /api/tags endpoint
+      const tagsPath = apiBasePath !== '/' 
+        ? `${apiBasePath}/tags` 
+        : '/tags';
+      console.log(`Rewriting tags path from ${path} to ${tagsPath}`);
+      return tagsPath;
+    }
+    
+    // For other API endpoints, handle normally
     const strippedPath = path.replace(/^\/api/, '');
     
     // If the API URL already has a path structure (like /api), use it as a prefix
@@ -82,11 +91,21 @@ app.use('/v1', createProxyMiddleware({
   target: `${parsedUrl.protocol}//${parsedUrl.host}`,
   changeOrigin: true,
   pathRewrite: (path) => {
-    // Remove /api from the path and prepend the API base path
-    // This ensures our requests go to the correct endpoint on the Ollama server
+    // For the chat completions endpoint, we need special handling
+    if (path === '/v1/chat/completions') {
+      // Assuming the Ollama API expects /v1/chat/completions endpoint 
+      // or maybe just /chat/completions depending on the API
+      const chatPath = apiBasePath !== '/' 
+        ? `${apiBasePath}/chat/completions` 
+        : '/chat/completions';
+      console.log(`Rewriting chat completions path from ${path} to ${chatPath}`);
+      return chatPath;
+    }
+    
+    // For other v1 endpoints, handle normally
     const strippedPath = path.replace(/^\/v1/, '');
     
-    // If the API URL already has a path structure (like /v1/ use it as a prefix
+    // If the API URL already has a path structure (like /v1), use it as a prefix
     // Otherwise, just use the stripped path
     const newPath = apiBasePath !== '/' 
       ? `${apiBasePath}${strippedPath}` 
@@ -117,4 +136,7 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Proxying API requests to ${ollamaApiUrl}`);
+  console.log(`API base path: ${apiBasePath}`);
+  console.log(`Example tag request will be proxied to: ${apiBasePath !== '/' ? `${apiBasePath}/tags` : '/tags'}`);
+  console.log(`Example chat request will be proxied to: ${apiBasePath !== '/' ? `${apiBasePath}/chat/completions` : '/chat/completions'}`);
 }); 
