@@ -28,3 +28,12 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Build directories
+build/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

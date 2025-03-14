@@ -1,6 +1,19 @@
 import axios from 'axios';
 
-const OLLAMA_API_URL = import.meta.env.VITE_OLLAMA_API_URL;
+// Get the API URL for different environments
+const getApiBaseUrl = () => {
+  // In development, use the environment variable
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_OLLAMA_API_URL;
+  }
+  
+  // In production, use the current origin with /api path
+  // This will route through our proxy server
+  return `${window.location.origin}/api`;
+};
+
+// Use the function to determine the API base URL
+const API_BASE_URL = getApiBaseUrl();
 
 interface ModelInfo {
   name: string;
@@ -21,7 +34,7 @@ interface ChatResponse {
 export const ollamaService = {
   // Get list of available models
   async getModels(): Promise<ModelInfo[]> {
-    const response = await axios.get(`${OLLAMA_API_URL}/api/tags`);
+    const response = await axios.get(`${API_BASE_URL}/tags`);
     return response.data.models;
   },
 
@@ -33,7 +46,7 @@ export const ollamaService = {
   ): Promise<string> {
     if (onProgress) {
       // Handle streaming response
-      const response = await fetch(`${OLLAMA_API_URL}/api/chat`, {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +130,7 @@ export const ollamaService = {
       return fullResponse;
     } else {
       // Handle non-streaming response
-      const response = await axios.post(`${OLLAMA_API_URL}/api/chat`, {
+      const response = await axios.post(`${API_BASE_URL}/chat`, {
         model,
         messages,
         stream: false,
