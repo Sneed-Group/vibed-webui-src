@@ -6,7 +6,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "serve": "vite",
     "lint": "eslint .",
     "preview": "vite preview"
   },
