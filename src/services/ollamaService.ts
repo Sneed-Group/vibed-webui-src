@@ -69,20 +69,34 @@ export const ollamaService = {
     const url = `${API_BASE_URL}${endpoint}`;
     console.log('Generating completion from:', url);
     
-    // Convert OpenAI chat messages format to Ollama prompt format
-    // Get the last user message as the prompt
+    // Extract the last user message as the prompt
     const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
     if (!lastUserMessage) {
       throw new Error('No user message found in the conversation');
     }
     
-    // Create request body for Ollama native API
+    // Create a system prompt from previous assistant messages if available
+    let systemPrompt = '';
+    if (messages.length > 1) {
+      // Get all previous messages and format them as a conversation
+      const previousMessages = messages.slice(0, -1); // All except the last user message
+      if (previousMessages.length > 0) {
+        systemPrompt = previousMessages
+          .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+          .join('\n\n');
+      }
+    }
+    
+    // Create request body according to Ollama's API specification
     const requestBody = {
       model,
       prompt: lastUserMessage.content,
       stream: !!onProgress,
-      // Include context from previous messages if any
-      context: [] // Ollama uses this for conversational context
+      options: {
+        temperature: 0.7,
+        num_predict: 1024
+      },
+      ...(systemPrompt ? { system: `Previous conversation:\n${systemPrompt}` } : {})
     };
     
     console.log('Request payload:', JSON.stringify(requestBody, null, 2));
@@ -98,7 +112,7 @@ export const ollamaService = {
       });
 
       // Log response status for debugging
-      console.log('Chat completion response status:', response.status);
+      console.log('Generation response status:', response.status);
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Error response:', errorText);
@@ -196,7 +210,7 @@ export const ollamaService = {
       try {
         const response = await axios.post(url, requestBody);
         console.log('Non-streaming response:', response.status);
-        // Adapt the response format
+        // Return the response from Ollama's native API format
         return response.data.response || '';
       } catch (error) {
         console.error('Error generating completion:', error);
