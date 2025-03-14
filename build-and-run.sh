@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Install dependencies
+echo "Installing dependencies..."
+npm i
+
 # Build the application
 echo "Building the application..."
 npm run build
